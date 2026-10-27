@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ja"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111613">
+<title>伝言板フォトラリー | ゴール</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head><body>
+<main class="page">
+  <a class="btn" href="../" style="align-self:flex-start">← 駅一覧</a>
+  <h1>スタンプ帳</h1>
+  <p class="muted">ゴール会場の入口で、この画面か撮影した5枚をスタッフに見せてください。</p>
+  <div id="status"></div>
+  <div class="grid" id="grid"></div>
+  <div class="row" style="justify-content:flex-start">
+    <button class="btn primary" id="handed" type="button">スタッフ用：ノベルティ渡し済にする</button>
+    <button class="btn" id="reset" type="button">記録をリセット（デモ用）</button>
+  </div>
+  <p class="muted" id="note">渡し済の表示は二重受け取りの目安です。厳密な不正防止はしない前提です。</p>
+</main>
+<script src="../assets/stations.js"></script>
+<script>
+  let s = rallyLoad();
+  let confirmReset = false;
+  function render() {
+    const done = STATIONS.filter(st => s.imgs[st.id]).length;
+    document.getElementById("status").innerHTML = s.handed ? '<div class="stamp">ノベルティ渡し済</div>'
+      : done === STATIONS.length ? '<div class="stamp">5駅達成</div>'
+      : `<p>${done} / ${STATIONS.length} 駅。あと ${STATIONS.length - done} 駅です。</p>`;
+    document.getElementById("grid").innerHTML = STATIONS.map(st => `<div class="thumb">${s.imgs[st.id]
+      ? `<img src="${s.imgs[st.id]}" alt="${st.name}の写真">` : '<div class="empty">未撮影</div>'}<span>${st.name}</span></div>`).join("");
+    document.getElementById("handed").disabled = s.handed || done < STATIONS.length;
+  }
+  document.getElementById("handed").onclick = () => { s.handed = true; rallyStore(s); render(); };
+  document.getElementById("reset").onclick = e => {
+    if (!confirmReset) { confirmReset = true; e.target.textContent = "もう一度押すとリセット"; return; }
+    s = { imgs: {}, handed: false }; rallyStore(s); confirmReset = false; e.target.textContent = "記録をリセット（デモ用）"; render();
+  };
+  render();
+</script>
+</body></html>

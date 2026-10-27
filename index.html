@@ -3,31 +3,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111613">
-<title>伝言板フォトラリー デモ</title>
+<title>伝言板フォトラリー</title>
 <link rel="stylesheet" href="assets/style.css">
 </head><body>
 <main class="page">
-  <span class="tag">営業用デモ ・ 駅名とキャラクターは仮</span>
   <h1>伝言板フォトラリー</h1>
-  <p>本番では各駅のポスターにQRを1つずつ載せます。下のQRをスマホで読むか、リンクを開くと、その駅のカメラ画面が起動します。</p>
-  <ul class="list" id="list"></ul>
-  <a class="item" href="goal/"><span class="name">ゴール（スタンプ帳・スタッフ確認画面）</span><span class="st">→</span></a>
-  <p class="muted">撮影した画像と達成状況は、各自のスマホのブラウザ内にだけ保存されます。サーバーには送られません。</p>
+  <p>各駅に掲出しているポスターのQRコードから参加してください。</p>
+  <a class="btn" href="goal/" style="align-self:flex-start">スタンプ帳を見る</a>
 </main>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script src="assets/stations.js"></script>
-<script>
-  const s = rallyLoad();
-  const base = new URL(".", location.href).href;
-  document.getElementById("list").innerHTML = STATIONS.map(st => {
-    const url = `${base}s/${st.id}/`;
-    let svg = "";
-    try { const q = qrcode(0, "M"); q.addData(url); q.make(); svg = q.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); } catch (e) {}
-    return `<li><a class="item${s.imgs[st.id] ? " done" : ""}" href="s/${st.id}/">
-      <span class="qr">${svg}</span>
-      <span class="mark" style="background:${st.color}">${st.line}</span>
-      <span class="name">${st.name}<span class="url">${url}</span></span>
-      <span class="st">${s.imgs[st.id] ? "撮影済" : "未撮影"}</span></a></li>`;
-  }).join("");
-</script>
 </body></html>

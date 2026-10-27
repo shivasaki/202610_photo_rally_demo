@@ -28,6 +28,7 @@ button{font:inherit}
 .swatch{width:32px;height:32px;border-radius:50%;border:3px solid var(--line);padding:0;cursor:pointer}
 .swatch[aria-pressed="true"]{border-color:#fff}
 .chip{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+.chip.icon{display:inline-grid;place-items:center;width:36px;height:36px;padding:0}
 .chip[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
 .shutter-row{display:flex;align-items:center;justify-content:center;gap:24px}
 .shutter{width:72px;height:72px;border-radius:50%;border:5px solid #fff;background:var(--accent);cursor:pointer}
@@ -55,8 +56,20 @@ p{margin:0}
 .item.done .st{color:var(--done);font-weight:700}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .thumb{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.thumb img,.thumb .empty{width:100%;aspect-ratio:3/4;object-fit:cover;display:block}
+.thumb img,.thumb .empty{width:100%;aspect-ratio:3/4;object-fit:contain;background:#000;display:block}
 .thumb .empty{display:grid;place-items:center;color:var(--muted);font-size:12px;background:repeating-linear-gradient(45deg,transparent 0 8px,var(--line) 8px 9px)}
 .thumb span{display:block;font-size:13px;padding:6px 10px;font-weight:700}
 .stamp{align-self:flex-start;font-family:var(--f-display);font-size:24px;color:var(--accent);border:3px solid var(--accent);border-radius:8px;padding:6px 14px;transform:rotate(-4deg)}
 .qr{background:#fff;border-radius:6px;padding:6px;width:84px;height:84px;flex:none}
+
+/* 横画面：映像を左、道具とシャッターを右の列に置く。映像と出力は4:3横 */
+@media (orientation:landscape){
+  .cam{display:grid;grid-template-columns:auto 96px;grid-template-rows:auto auto 1fr;justify-content:center;align-content:center;column-gap:16px;row-gap:8px}
+  .topbar{grid-column:1/-1;max-width:none}
+  .stage{grid-row:2/4;width:min(900px,calc(100vw - 150px),calc((100dvh - 70px) * 4 / 3))}
+  .tools{grid-column:2;grid-row:2;flex-direction:column;width:96px}
+  .shutter-row{grid-column:2;grid-row:3;align-self:center}
+  .result{grid-column:1/-1;grid-row:2/4;width:calc(100vw - 40px);max-width:900px}
+  .result img{width:min(100%,calc((100dvh - 150px) * 4 / 3));align-self:center}
+}
+.stage.landscape{aspect-ratio:4/3}

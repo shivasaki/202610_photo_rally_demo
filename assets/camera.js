@@ -1,6 +1,11 @@
 (function () {
-  const W = 1080, H = 1440; // 出力画像サイズ（3:4 縦）
-  const BOARD = { x: 40, y: 640, w: 1000, h: 640 };
+  // 端末の向きごとの出力サイズと配置。poster は位置合わせ枠で、ポスターの縦横比が決まったら合わせる
+  const LAYOUTS = {
+    portrait: { w: 1080, h: 1440, poster: { x: 40, y: 330, w: 1000, h: 600 }, chara: [790, 960, 250, 340], prop: [40, 1190, 240, 110] },
+    landscape: { w: 1440, h: 1080, poster: { x: 170, y: 170, w: 1100, h: 660 }, chara: [1210, 700, 200, 290], prop: [40, 900, 220, 100] }
+  };
+  const landscapeMq = matchMedia("(orientation: landscape)");
+  let L = null, W = 0, H = 0;
   const COLORS = [["白", "#f2f4ef"], ["黄", "#f3d36b"], ["桃", "#f2a0b6"], ["青", "#8fc8f0"]];
   const st = STATIONS.find(s => s.id === document.body.dataset.station) || STATIONS[0];
   document.title = `伝言板フォトラリー | ${st.name}`;
@@ -12,13 +17,18 @@
     <div class="stage" id="stage">
       <video id="video" playsinline muted autoplay></video>
       <img class="bgimg" id="bgimg" alt="" hidden>
-      <canvas id="board"></canvas>
+      <canvas id="overlay"></canvas>
+      <canvas id="guide"></canvas>
       <canvas id="ink"></canvas>
       <div class="msg" id="msg"><p>カメラを起動しています…</p></div>
     </div>
     <div class="tools" id="tools">
       <span id="swatches" class="row"></span>
-      <button class="chip" id="eraser" aria-pressed="false" type="button">黒板消し</button>
+      <button class="chip icon" id="eraser" aria-pressed="false" aria-label="消しゴム" title="消しゴム" type="button">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>
+        </svg>
+      </button>
       <button class="chip" id="clear" type="button">全部消す</button>
       <button class="chip" id="flip" type="button">カメラ切替</button>
     </div>
@@ -39,53 +49,69 @@
   </div>`;
 
   const $ = id => document.getElementById(id);
-  const video = $("video"), bgimg = $("bgimg"), board = $("board"), ink = $("ink");
-  const bctx = board.getContext("2d"), ictx = ink.getContext("2d");
-  board.width = ink.width = W; board.height = ink.height = H;
+  const video = $("video"), bgimg = $("bgimg"), overlay = $("overlay"), guide = $("guide"), ink = $("ink");
+  const octx = overlay.getContext("2d"), gctx = guide.getContext("2d"), ictx = ink.getContext("2d");
+
+  // 向きが変わったら出力サイズを切り替える。書き込みは縦横比を保って新しいキャンバスに収める
+  function applyLayout() {
+    const next = landscapeMq.matches ? LAYOUTS.landscape : LAYOUTS.portrait;
+    if (next === L) return;
+    const prev = L && document.createElement("canvas");
+    if (prev) { prev.width = W; prev.height = H; prev.getContext("2d").drawImage(ink, 0, 0); }
+    L = next; W = L.w; H = L.h;
+    overlay.width = guide.width = ink.width = W; overlay.height = guide.height = ink.height = H;
+    $("stage").classList.toggle("landscape", W > H);
+    if (prev) {
+      const s = Math.min(W / prev.width, H / prev.height);
+      ictx.drawImage(prev, (W - prev.width * s) / 2, (H - prev.height * s) / 2, prev.width * s, prev.height * s);
+      drawOverlay(); drawGuide();
+    }
+  }
+  applyLayout();
 
   let stream = null, facing = "environment", color = COLORS[0][1], erasing = false;
 
-  /* ---------- 黒板オーバーレイ ---------- */
+  /* ---------- オーバーレイ（ポスター自体が黒板なので、上に重ねるのは情報と素材枠だけ） ---------- */
   function today() { const d = new Date(); return `${d.getMonth() + 1}.${d.getDate()}`; }
-  function drawBoard() {
-    const c = bctx, b = BOARD;
+  function plate(x, y, w, text, font, align) {
+    const c = octx;
+    c.fillStyle = "rgba(246,246,242,.95)"; c.fillRect(x, y, w, 78);
+    c.fillStyle = "#1d2621"; c.font = font; c.textAlign = align;
+    c.fillText(text, align === "left" ? x + 38 : x + w / 2, y + 54);
+  }
+  function drawOverlay() {
+    const c = octx;
     c.clearRect(0, 0, W, H);
-    // 駅名板
-    c.fillStyle = "rgba(246,246,242,.95)"; c.fillRect(32, 32, 330, 78);
+    plate(32, 32, 330, st.name, "bold 40px 'Zen Kaku Gothic New'", "left");
     c.fillStyle = st.color; c.fillRect(32, 32, 18, 78);
-    c.fillStyle = "#1d2621"; c.font = "bold 40px 'Zen Kaku Gothic New'"; c.textAlign = "left";
-    c.fillText(st.name, 70, 86);
-    // 木枠と黒板
-    c.fillStyle = "#6b4a2b"; c.fillRect(b.x, b.y, b.w, b.h);
-    c.fillStyle = "#2f5a43"; c.fillRect(b.x + 22, b.y + 22, b.w - 44, b.h - 44);
-    let seed = 11; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < 2200; i++) { c.fillStyle = `rgba(255,255,255,${r() * 0.05})`; c.fillRect(b.x + 22 + r() * (b.w - 44), b.y + 22 + r() * (b.h - 44), r() * 3 + 1, r() * 2 + 1); }
-    // 罫線
-    const gx0 = b.x + 110, gx1 = b.x + b.w - 120, gy0 = b.y + 110, gy1 = b.y + b.h - 50;
-    c.strokeStyle = "rgba(235,245,235,.5)"; c.lineWidth = 2;
-    c.strokeRect(gx0, gy0, gx1 - gx0, gy1 - gy0);
-    for (let x = gx0 + 56; x < gx1; x += 56) { c.beginPath(); c.moveTo(x, gy0); c.lineTo(x, gy1); c.stroke(); }
-    c.fillStyle = "rgba(240,245,238,.9)"; c.font = "46px 'Yusei Magic'"; c.textAlign = "center";
-    c.fillText("伝　言　板", (gx0 + gx1) / 2, b.y + 88);
-    // 左の注意書き（縦書き）
-    c.font = "19px 'Zen Kaku Gothic New'"; c.fillStyle = "rgba(240,245,238,.7)";
-    [..."六時間を過ぎたものは消します。"].forEach((ch, i) => c.fillText(ch, b.x + 66, gy0 + 24 + i * 26));
-    // 右の日付欄
-    c.font = "22px 'Zen Kaku Gothic New'"; c.fillText("日付", b.x + b.w - 66, gy0 + 26);
-    c.font = "30px 'Yusei Magic'"; c.fillStyle = "#f3d36b";
-    [...today()].forEach((ch, i) => c.fillText(ch, b.x + b.w - 66, gy0 + 72 + i * 34));
-    // 作品モチーフの差し替え枠
-    slot((gx0 + gx1) / 2 - 260, gy0 + 150, 360, 180, "モチーフ素材");
+    plate(W - 32 - 200, 32, 200, today(), "40px 'Yusei Magic'", "center");
     // 素材差し替え枠
-    slot(760, 300, 260, 400, st.chara);
-    slot(60, 1300, 240, 110, "小道具素材");
-    c.fillStyle = "rgba(255,255,255,.85)"; c.font = "22px 'Zen Kaku Gothic New'"; c.textAlign = "right";
-    c.fillText("〇〇展　会期 〇/〇〜〇/〇　会場 〇〇", W - 40, H - 30);
+    slot(...L.chara, st.chara);
+    slot(...L.prop, "小道具素材");
+    c.save(); c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = 6;
+    c.fillStyle = "rgba(255,255,255,.92)"; c.font = "22px 'Zen Kaku Gothic New'"; c.textAlign = "right";
+    c.fillText("〇〇展　会期 〇/〇〜〇/〇　会場 〇〇", W - 40, H - 30); c.restore();
+  }
+  // 撮影前だけ見せる位置合わせ枠。保存画像には入れない
+  function drawGuide() {
+    const c = gctx, p = L.poster, k = 70;
+    c.clearRect(0, 0, W, H);
+    c.save(); c.shadowColor = "rgba(0,0,0,.7)"; c.shadowBlur = 6;
+    c.strokeStyle = "rgba(255,255,255,.75)"; c.lineWidth = 3; c.setLineDash([16, 12]);
+    c.strokeRect(p.x, p.y, p.w, p.h); c.setLineDash([]);
+    c.lineWidth = 8; c.strokeStyle = "#fff"; c.beginPath();
+    [[p.x, p.y, 1, 1], [p.x + p.w, p.y, -1, 1], [p.x, p.y + p.h, 1, -1], [p.x + p.w, p.y + p.h, -1, -1]].forEach(([x, y, dx, dy]) => {
+      c.moveTo(x + dx * k, y); c.lineTo(x, y); c.lineTo(x, y + dy * k);
+    });
+    c.stroke();
+    c.fillStyle = "#fff"; c.font = "bold 30px 'Zen Kaku Gothic New'"; c.textAlign = "center";
+    c.fillText("ポスターの黒板をこの枠に合わせてください", W / 2, p.y - 24); c.restore();
   }
   function slot(x, y, w, h, label) {
-    const c = bctx; c.save();
-    c.fillStyle = "rgba(243,211,107,.18)"; c.fillRect(x, y, w, h);
-    c.setLineDash([12, 9]); c.strokeStyle = "#f3d36b"; c.lineWidth = 4; c.strokeRect(x, y, w, h); c.setLineDash([]);
+    const c = octx; c.save();
+    c.beginPath(); c.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    c.fillStyle = "rgba(243,211,107,.18)"; c.fill();
+    c.setLineDash([12, 9]); c.strokeStyle = "#f3d36b"; c.lineWidth = 4; c.stroke(); c.setLineDash([]);
     c.fillStyle = "#f3d36b"; c.textAlign = "center"; c.font = "bold 26px 'Zen Kaku Gothic New'";
     c.fillText(label, x + w / 2, y + h / 2); c.font = "18px 'Zen Kaku Gothic New'";
     c.fillText("素材差し替え", x + w / 2, y + h / 2 + 30); c.restore();
@@ -156,7 +182,7 @@
     const o = out.getContext("2d");
     if (!video.hidden && video.videoWidth) drawCover(o, video, video.videoWidth, video.videoHeight, facing === "user");
     else if (!bgimg.hidden) drawCover(o, bgimg, bgimg.naturalWidth, bgimg.naturalHeight, false);
-    o.drawImage(board, 0, 0); o.drawImage(ink, 0, 0);
+    o.drawImage(overlay, 0, 0); o.drawImage(ink, 0, 0);
     const url = out.toDataURL("image/jpeg", .88);
     $("result-img").src = url; $("download").href = url;
     out.toBlob(b => {
@@ -165,8 +191,8 @@
       $("share").hidden = !(navigator.canShare && navigator.canShare({ files: [file] }));
     }, "image/jpeg", .88);
     // スタンプ帳用の縮小版
-    const sm = document.createElement("canvas"); sm.width = 360; sm.height = 480;
-    sm.getContext("2d").drawImage(out, 0, 0, 360, 480);
+    const sm = document.createElement("canvas"); sm.width = W / 3; sm.height = H / 3;
+    sm.getContext("2d").drawImage(out, 0, 0, sm.width, sm.height);
     const s = rallyLoad(); s.imgs[st.id] = sm.toDataURL("image/jpeg", .7); rallyStore(s);
     ["stage", "tools", "shutter-row"].forEach(id => $(id).hidden = true);
     $("result").hidden = false; window.scrollTo(0, 0);
@@ -176,9 +202,10 @@
   };
   $("retake").onclick = () => { ["stage", "tools", "shutter-row"].forEach(id => $(id).hidden = false); $("result").hidden = true; };
 
-  // フォント読み込み後に黒板を描画してからカメラ起動
+  // フォント読み込み後にオーバーレイを描画してからカメラ起動
   (async () => {
     try { await Promise.all([document.fonts.load("46px 'Yusei Magic'"), document.fonts.load("bold 40px 'Zen Kaku Gothic New'")]); } catch (e) {}
-    drawBoard(); startCamera();
+    drawOverlay(); drawGuide(); startCamera();
+    landscapeMq.addEventListener("change", applyLayout);
   })();
 })();

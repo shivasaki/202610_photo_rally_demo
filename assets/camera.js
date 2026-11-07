@@ -1,8 +1,9 @@
 (function () {
   // 端末の向きごとの出力サイズと配置。poster は位置合わせ枠で、ポスターの縦横比が決まったら合わせる
   const LAYOUTS = {
-    portrait: { w: 1080, h: 1440, poster: { x: 40, y: 330, w: 1000, h: 600 }, chara: [790, 960, 250, 340], prop: [40, 1190, 240, 110] },
-    landscape: { w: 1440, h: 1080, poster: { x: 170, y: 170, w: 1100, h: 660 }, chara: [1210, 700, 200, 290], prop: [40, 900, 220, 100] }
+    portrait: { w: 1080, h: 1440, poster: { x: 40, y: 300, w: 1000, h: 600 }, chara: [770, 940, 280, 360], prop: [40, 1180, 300, 150] },
+    // 横はポスター枠を横幅いっぱいにとり、キャラクター枠は枠の右下に少し重ねる
+    landscape: { w: 1440, h: 1080, poster: { x: 40, y: 130, w: 1360, h: 816 }, chara: [1160, 610, 260, 380], prop: [40, 946, 290, 110] }
   };
   const landscapeMq = matchMedia("(orientation: landscape)");
   let L = null, W = 0, H = 0;
@@ -13,7 +14,7 @@
   const app = document.getElementById("app");
   app.innerHTML = `
   <div class="cam">
-    <div class="topbar"><span>${st.name}（仮）・デモ</span><a href="../../goal/">スタンプ帳</a></div>
+    <div class="topbar"><span>${st.name}（仮）<span class="nb">・デモ</span></span><a href="../../goal/">スタンプ帳</a></div>
     <div class="stage" id="stage">
       <video id="video" playsinline muted autoplay></video>
       <img class="bgimg" id="bgimg" alt="" hidden>
@@ -30,10 +31,11 @@
         </svg>
       </button>
       <button class="chip" id="clear" type="button">全部消す</button>
-      <button class="chip" id="flip" type="button">カメラ切替</button>
     </div>
     <div class="shutter-row" id="shutter-row">
+      <span class="spacer"></span>
       <button class="shutter" id="shutter" type="button" aria-label="撮影" disabled></button>
+      <button class="chip" id="flip" type="button">カメラ切替</button>
     </div>
     <div class="result" id="result" hidden>
       <img id="result-img" alt="${st.name}の伝言板写真">
@@ -79,6 +81,14 @@
     c.fillStyle = "#1d2621"; c.font = font; c.textAlign = align;
     c.fillText(text, align === "left" ? x + 38 : x + w / 2, y + 54);
   }
+  // 写真の上でも読めるよう、文字の下に暗い角丸の下地を敷く
+  function backdrop(c, x, y, w, h, r) {
+    c.save(); c.fillStyle = "rgba(12,16,14,.72)"; c.beginPath(); c.roundRect(x, y, w, h, r); c.fill(); c.restore();
+  }
+  // 幅に収まるまでフォントを縮める
+  function fitFont(c, text, weight, size, maxW) {
+    do { c.font = `${weight} ${size}px 'Zen Kaku Gothic New'`; } while (c.measureText(text).width > maxW && --size > 16);
+  }
   function drawOverlay() {
     const c = octx;
     c.clearRect(0, 0, W, H);
@@ -88,9 +98,12 @@
     // 素材差し替え枠
     slot(...L.chara, st.chara);
     slot(...L.prop, "小道具素材");
-    c.save(); c.shadowColor = "rgba(0,0,0,.8)"; c.shadowBlur = 6;
-    c.fillStyle = "rgba(255,255,255,.92)"; c.font = "22px 'Zen Kaku Gothic New'"; c.textAlign = "right";
-    c.fillText("〇〇展　会期 〇/〇〜〇/〇　会場 〇〇", W - 40, H - 30); c.restore();
+    const term = "〇〇展　会期 〇/〇〜〇/〇　会場 〇〇";
+    c.save(); c.font = "bold 30px 'Zen Kaku Gothic New'";
+    const tw = c.measureText(term).width;
+    backdrop(c, W - 32 - tw - 36, H - 32 - 52, tw + 36, 52, 26);
+    c.fillStyle = "#fff"; c.textAlign = "right"; c.textBaseline = "middle";
+    c.fillText(term, W - 32 - 18, H - 32 - 26); c.restore();
   }
   // 撮影前だけ見せる位置合わせ枠。保存画像には入れない
   function drawGuide() {
@@ -104,17 +117,26 @@
       c.moveTo(x + dx * k, y); c.lineTo(x, y); c.lineTo(x, y + dy * k);
     });
     c.stroke();
-    c.fillStyle = "#fff"; c.font = "bold 30px 'Zen Kaku Gothic New'"; c.textAlign = "center";
-    c.fillText("ポスターの黒板をこの枠に合わせてください", W / 2, p.y - 24); c.restore();
+    c.restore();
+    // 案内文は枠の内側上部に、暗い下地つきで出す
+    const msg = "ポスターの黒板をこの枠に合わせてください";
+    c.save(); fitFont(c, msg, "bold", 36, p.w - 2 * k - 60);
+    const tw = c.measureText(msg).width;
+    backdrop(c, W / 2 - tw / 2 - 24, p.y + 24, tw + 48, 60, 30);
+    c.fillStyle = "#fff"; c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText(msg, W / 2, p.y + 54); c.restore();
   }
   function slot(x, y, w, h, label) {
     const c = octx; c.save();
     c.beginPath(); c.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-    c.fillStyle = "rgba(243,211,107,.18)"; c.fill();
-    c.setLineDash([12, 9]); c.strokeStyle = "#f3d36b"; c.lineWidth = 4; c.stroke(); c.setLineDash([]);
-    c.fillStyle = "#f3d36b"; c.textAlign = "center"; c.font = "bold 26px 'Zen Kaku Gothic New'";
-    c.fillText(label, x + w / 2, y + h / 2); c.font = "18px 'Zen Kaku Gothic New'";
-    c.fillText("素材差し替え", x + w / 2, y + h / 2 + 30); c.restore();
+    c.fillStyle = "rgba(12,16,14,.62)"; c.fill();
+    c.setLineDash([14, 10]); c.strokeStyle = "#f3d36b"; c.lineWidth = 5; c.stroke(); c.setLineDash([]);
+    const cx = x + w / 2, cy = y + h / 2;
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillStyle = "#fff"; fitFont(c, label, "bold", 40, w * .82);
+    c.fillText(label, cx, cy - 18);
+    c.fillStyle = "#f3d36b"; fitFont(c, "素材差し替え", "bold", 28, w * .7);
+    c.fillText("素材差し替え", cx, cy + 24); c.restore();
   }
 
   /* ---------- チョーク ---------- */

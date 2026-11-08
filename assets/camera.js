@@ -2,8 +2,11 @@
   // 端末の向きごとの出力サイズと配置。poster は位置合わせ枠で、ポスターの縦横比が決まったら合わせる
   const LAYOUTS = {
     portrait: { w: 1080, h: 1440, poster: { x: 40, y: 300, w: 1000, h: 600 }, chara: [770, 940, 280, 360], prop: [40, 1180, 300, 150] },
-    // 横はポスター枠を横幅いっぱいにとり、キャラクター枠は枠の右下に少し重ねる
-    landscape: { w: 1440, h: 1080, poster: { x: 40, y: 130, w: 1360, h: 816 }, chara: [1160, 610, 260, 380], prop: [40, 946, 290, 110] }
+    // 横は4:3と16:9のうち、画面に大きく映るほうを使う（chooseLayout）。
+    // アドレスバーで高さが削られた横長の画面では16:9のほうが大きくなる
+    landscape: { w: 1440, h: 1080, poster: { x: 40, y: 130, w: 1360, h: 816 }, chara: [1160, 610, 260, 380], prop: [40, 946, 290, 110] },
+    // 16:9はポスター枠を中央に置き、キャラクター枠は右、小道具枠は左の余白に置く
+    wide: { w: 1920, h: 1080, poster: { x: 280, y: 130, w: 1360, h: 816 }, chara: [1652, 560, 240, 380], prop: [24, 790, 240, 150] }
   };
   const landscapeMq = matchMedia("(orientation: landscape)");
   let L = null, W = 0, H = 0;
@@ -14,7 +17,7 @@
   const app = document.getElementById("app");
   app.innerHTML = `
   <div class="cam">
-    <div class="topbar"><span>${st.name}（仮）<span class="nb">・デモ</span></span><span class="links"><button class="chip" id="fs" type="button" hidden>全画面</button><a href="../../goal/">スタンプ帳</a></span></div>
+    <div class="topbar"><span>${st.name}（仮）<span class="nb">・デモ</span></span><a href="../../goal/" class="goal"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg><span>スタンプ帳</span></a></div>
     <div class="stage" id="stage">
       <video id="video" playsinline muted autoplay></video>
       <img class="bgimg" id="bgimg" alt="" hidden>
@@ -30,12 +33,12 @@
           <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/>
         </svg>
       </button>
-      <button class="chip" id="clear" type="button">全部消す</button>
+      <button class="chip" id="clear" type="button" aria-label="全部消す" title="全部消す"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span class="lbl">全部消す</span></button>
     </div>
     <div class="shutter-row" id="shutter-row">
       <span class="spacer"></span>
       <button class="shutter" id="shutter" type="button" aria-label="撮影" disabled></button>
-      <button class="chip" id="flip" type="button">カメラ切替</button>
+      <button class="chip" id="flip" type="button" aria-label="カメラ切替" title="カメラ切替"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M15.5 11.5a3.5 3.5 0 0 0-6-1.5L8.5 11"/><path d="M8.5 15a3.5 3.5 0 0 0 6 1.5l1-1"/></svg><span class="lbl">カメラ切替</span></button>
     </div>
     <div class="result" id="result" hidden>
       <img id="result-img" alt="${st.name}の伝言板写真">
@@ -55,14 +58,21 @@
   const octx = overlay.getContext("2d"), gctx = guide.getContext("2d"), ictx = ink.getContext("2d");
 
   // 向きが変わったら出力サイズを切り替える。書き込みは縦横比を保って新しいキャンバスに収める
+  // 横画面で映像に使える範囲（style.css の横画面の左右の列・余白と合わせる）に、どちらの比率が大きく収まるか
+  function chooseLayout() {
+    if (!landscapeMq.matches) return LAYOUTS.portrait;
+    const aw = innerWidth - 2 * 72 - 2 * 8 - 16, ah = innerHeight - 8;
+    const area = r => { const w = Math.min(aw, ah * r); return w * w / r; };
+    return area(16 / 9) > area(4 / 3) ? LAYOUTS.wide : LAYOUTS.landscape;
+  }
   function applyLayout() {
-    const next = landscapeMq.matches ? LAYOUTS.landscape : LAYOUTS.portrait;
+    const next = chooseLayout();
     if (next === L) return;
     const prev = L && document.createElement("canvas");
     if (prev) { prev.width = W; prev.height = H; prev.getContext("2d").drawImage(ink, 0, 0); }
     L = next; W = L.w; H = L.h;
     overlay.width = guide.width = ink.width = W; overlay.height = guide.height = ink.height = H;
-    $("stage").classList.toggle("landscape", W > H);
+    document.querySelector(".cam").style.setProperty("--ar", W / H);
     if (prev) {
       const s = Math.min(W / prev.width, H / prev.height);
       ictx.drawImage(prev, (W - prev.width * s) / 2, (H - prev.height * s) / 2, prev.width * s, prev.height * s);
@@ -190,19 +200,6 @@
     bgimg.src = URL.createObjectURL(f); bgimg.hidden = false; video.hidden = true;
     $("msg").hidden = true; $("shutter").disabled = false;
   });
-  // 全画面でアドレスバーを消す（Android Chrome など）。iPhone Safari は非対応なのでボタンを出さない。
-  // 書き込みの途中で画面の大きさが変わらないよう、自動では切り替えずボタンで切り替える
-  const root = document.documentElement;
-  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
-  if (root.requestFullscreen || root.webkitRequestFullscreen) {
-    $("fs").hidden = false;
-    $("fs").onclick = () => {
-      if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-      else { const r = (root.requestFullscreen || root.webkitRequestFullscreen).call(root, { navigationUI: "hide" }); if (r && r.catch) r.catch(() => {}); }
-    };
-    const sync = () => { $("fs").textContent = fsEl() ? "全画面を終了" : "全画面"; };
-    document.addEventListener("fullscreenchange", sync); document.addEventListener("webkitfullscreenchange", sync);
-  }
   $("flip").onclick = () => { facing = facing === "environment" ? "user" : "environment"; startCamera(); };
 
   /* ---------- 撮影と保存 ---------- */
@@ -242,5 +239,6 @@
     try { await Promise.all([document.fonts.load("46px 'Yusei Magic'"), document.fonts.load("bold 40px 'Zen Kaku Gothic New'")]); } catch (e) {}
     drawOverlay(); drawGuide(); startCamera();
     landscapeMq.addEventListener("change", applyLayout);
+    let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(applyLayout, 200); });
   })();
 })();

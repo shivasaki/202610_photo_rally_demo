@@ -14,7 +14,7 @@
   const app = document.getElementById("app");
   app.innerHTML = `
   <div class="cam">
-    <div class="topbar"><span>${st.name}（仮）<span class="nb">・デモ</span></span><a href="../../goal/">スタンプ帳</a></div>
+    <div class="topbar"><span>${st.name}（仮）<span class="nb">・デモ</span></span><span class="links"><button class="chip" id="fs" type="button" hidden>全画面</button><a href="../../goal/">スタンプ帳</a></span></div>
     <div class="stage" id="stage">
       <video id="video" playsinline muted autoplay></video>
       <img class="bgimg" id="bgimg" alt="" hidden>
@@ -190,6 +190,19 @@
     bgimg.src = URL.createObjectURL(f); bgimg.hidden = false; video.hidden = true;
     $("msg").hidden = true; $("shutter").disabled = false;
   });
+  // 全画面でアドレスバーを消す（Android Chrome など）。iPhone Safari は非対応なのでボタンを出さない。
+  // 書き込みの途中で画面の大きさが変わらないよう、自動では切り替えずボタンで切り替える
+  const root = document.documentElement;
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  if (root.requestFullscreen || root.webkitRequestFullscreen) {
+    $("fs").hidden = false;
+    $("fs").onclick = () => {
+      if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else { const r = (root.requestFullscreen || root.webkitRequestFullscreen).call(root, { navigationUI: "hide" }); if (r && r.catch) r.catch(() => {}); }
+    };
+    const sync = () => { $("fs").textContent = fsEl() ? "全画面を終了" : "全画面"; };
+    document.addEventListener("fullscreenchange", sync); document.addEventListener("webkitfullscreenchange", sync);
+  }
   $("flip").onclick = () => { facing = facing === "environment" ? "user" : "environment"; startCamera(); };
 
   /* ---------- 撮影と保存 ---------- */

@@ -19,6 +19,8 @@ button{font:inherit}
 .cam{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px max(10px,env(safe-area-inset-right,0px)) 16px max(10px,env(safe-area-inset-left,0px));min-height:100dvh}
 .topbar{width:100%;max-width:560px;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
 .topbar .nb{display:inline-block}
+.topbar .links{display:flex;align-items:center;gap:8px}
+.topbar .links .chip{font-size:12px;padding:4px 12px}
 .topbar a{text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 12px}
 .stage{position:relative;width:min(100%,560px,calc((100dvh - 200px) * 3 / 4));aspect-ratio:3/4;background:#000;border-radius:10px;overflow:hidden;touch-action:none}
 .stage video,.stage img.bgimg,.stage canvas{position:absolute;inset:0;width:100%;height:100%}
@@ -78,8 +80,9 @@ p{margin:0}
     min-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
   }
   .topbar{display:contents}
-  .topbar span{grid-area:name;font-size:12px;line-height:1.4}
-  .topbar a{grid-area:goal;justify-self:center;font-size:12px;padding:4px 10px;white-space:nowrap}
+  .topbar > span:first-child{grid-area:name;font-size:12px;line-height:1.4}
+  .topbar .links{grid-area:goal;flex-direction:column;align-items:center}
+  .topbar a,.topbar .links .chip{font-size:12px;padding:4px 10px;white-space:nowrap}
   .stage{
     grid-area:1/2/3/3;
     width:min(
